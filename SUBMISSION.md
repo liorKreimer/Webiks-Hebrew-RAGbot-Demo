@@ -139,3 +139,8 @@ accordingly (this matches the original `.env-example` as shipped).
 
 To compare against the original unmodified retrieval, set `RETRIEVAL_MODE=dense` and
 restart the app — every other code path is untouched.
+
+## Presentation
+
+[`presentation.html`](./presentation.html) — a 3-slide deck (open it in a browser; arrow
+keys or click to navigate) covering the diagnosis, the fix and workflow, and the results.
