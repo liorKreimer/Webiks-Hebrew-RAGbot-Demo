@@ -84,8 +84,8 @@ Requires: Docker, Python 3.10 (exactly — not 3.11+), ~4GB free RAM headroom.
 
 ```bash
 # 1. Clone both repos as siblings
-git clone https://github.com/<your-fork>/Webiks-Hebrew-RAGbot-Demo.git
-git clone https://github.com/<your-fork>/Webiks-Hebrew-RAGbot.git
+git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot-Demo.git
+git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot.git
 
 # 2. Elasticsearch
 docker run -d --name es-rag \
