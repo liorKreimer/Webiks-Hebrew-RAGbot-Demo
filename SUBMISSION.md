@@ -20,16 +20,15 @@ sibling repo) now fuses the existing dense ranking with a new BM25 `match` query
 same indexed `content` field, via weighted **Reciprocal Rank Fusion** (dense:BM25 =
 2:1). No reindexing, no new model, no new dependency — BM25 is native to Elasticsearch.
 Toggled by a `RETRIEVAL_MODE` env var (`dense` = original behavior, byte-for-byte
-unchanged and verified via regression test; `hybrid` = the improvement). The Demo's
-`.env` sets `RETRIEVAL_MODE=hybrid`.
+unchanged — confirmed by both an automated eval-harness regression run and unit tests;
+`hybrid` = the improvement). The Demo's `.env` sets `RETRIEVAL_MODE=hybrid`.
 
-I initially tried **unweighted** RRF: it fixed the target failures but also reshuffled
-many already-correct rank-1 results and caused one new regression (a long
-natural-language query where BM25's OR-across-terms matching hit 436 of 450 indexed
-paragraphs, diluting its own signal). Rather than abandon the approach, I weighted dense
-2:1 over BM25 so lexical matching acts as a nudge rather than an equal competitor — this
-kept the full recall gain while recovering most of the lost precision. Full iteration
-detail in `EVALUATION_METHODOLOGY.md`.
+I initially tried **unweighted** RRF: it fixed the target failures but reshuffled many
+already-correct rank-1 results and caused one new regression (a long query where BM25's
+OR-across-terms matching hit 436/450 paragraphs, diluting its own signal). Weighting
+dense 2:1 over BM25 kept the recall gain while recovering most of the lost precision.
+Full iteration detail, including a per-paragraph RRF scoring bug caught and fixed during
+review, in `EVALUATION_METHODOLOGY.md`.
 
 ## Evaluation
 
@@ -56,26 +55,28 @@ earlier ceiling-effect dead end (a distractor-free index scored a meaningless pe
 1.000 on everything). Full methodology, including both dead ends, in
 `EVALUATION_METHODOLOGY.md`.
 
-**Results — Baseline (dense) vs. Improved (hybrid, weighted RRF):**
+**Results — Baseline (dense) vs. Improved (hybrid, weighted RRF), n=30 questions:**
 
 | Metric | Baseline | Improved | Δ |
 |---|---|---|---|
-| Recall@1 | 0.700 | 0.533 | −0.167 |
-| **Recall@3** | **0.833** | **0.967** | **+0.134** |
-| Recall@5 | 0.833 | 0.967 | +0.134 |
+| Recall@1 | 0.700 | 0.567 | −0.133 |
+| **Recall@3** | **0.833** | **0.933** | **+0.100** |
+| Recall@5 | 0.833 | 0.933 | +0.100 |
 | Recall@10 | 1.000 | 0.967 | −0.033 |
-| NDCG@3 | 0.775 | 0.785 | +0.010 |
-| MRR@10 | 0.780 | 0.722 | −0.058 |
-| Mean latency | 1.24s | 1.47s | +0.23s |
+| NDCG@3 | 0.775 | 0.772 | −0.003 |
+| MRR@10 | 0.780 | 0.721 | −0.059 |
+| Mean latency | 1.24s | 1.19s | −0.05s |
 | Not found (top 10) | 0/30 | 1/30 | +1 |
 
 Recall@3 — what actually determines whether the LLM sees the right page under
-production settings — improved from 0.833 to 0.967 (4 of 5 previously-missing
+production settings — improved from 0.833 to 0.933 (3 of 5 previously-missing
 questions now surface correctly). This came with an honest cost: some rank-1 hits
-got nudged to rank 2-3 by the fusion (lowering Recall@1/MRR), and one specific
-long, low-specificity query still regresses out of the top 10 — a known, documented
+got nudged lower by the fusion (lowering Recall@1/MRR), and one specific long,
+low-specificity query still regresses out of the top 10 — a known, documented
 limitation of plain-text BM25 without a Hebrew-aware analyzer (noted as future work).
-Full per-question detail: `results/baseline_metrics.json`, `results/improved_metrics.json`.
+With n=30, each question is worth ~3.3 points, so these deltas are directional, not
+statistically validated. Full per-question detail:
+`EVALUATION_METHODOLOGY.md`, `results/baseline_metrics.json`, `results/improved_metrics.json`.
 
 ## Running the updated backend locally
 
@@ -102,15 +103,23 @@ pip install -r requirements.txt   # installs the forked engine in editable mode 
 # 4. Model + config
 #    - Download the retrieval model and place it in app/artifacts/
 #      (see the original README for the Google Drive link)
-#    - Create app/.env from app/.env-example; set IS_MOCK_GPT_CLIENT=TRUE (no OpenAI key needed)
-#      and RETRIEVAL_MODE=hybrid (or "dense" to run the original, unmodified behavior)
-#    - Set PATH_TO_ES_INITIAL_VALUES to point at whatever paragraph-corpus JSON you want indexed
+#    - Create app/.env from app/.env-example; set IS_MOCK_GPT_CLIENT=TRUE (no OpenAI key needed),
+#      RETRIEVAL_MODE=hybrid (or "dense" for the original, unmodified behavior), and
+#      ES_EMBEDDING_INDEX=embedded_index (ships blank in .env-example - blank isn't the same
+#      as unset, and an empty value breaks the index pattern)
+#    - Set PATH_TO_ES_INITIAL_VALUES to a paragraph-corpus JSON to index. For a fast
+#      reproduction of the numbers above, use the committed
+#      downloads/paragraphs_corpus_holdout.json (450 paragraphs) - the full corpus is much
+#      larger and can take hours on a memory-constrained machine (see below)
 
 # 5. Run (note: cwd must be app/src — see IMPORTANT note below)
 cd app/src
 ../../.venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 5000
 
-# 6. Seed Elasticsearch (one-time, or whenever the corpus changes)
+# 6. Seed Elasticsearch (one-time, or whenever the corpus changes).
+#    This call is synchronous and blocks until indexing finishes - on the 450-paragraph
+#    holdout corpus above, expect roughly 30-40 minutes on a memory-constrained (~8GB) machine,
+#    not a hang. Don't run this concurrently with anything else memory-heavy.
 curl http://localhost:5000/initialize_elastic_from_json
 
 # 7. Verify
