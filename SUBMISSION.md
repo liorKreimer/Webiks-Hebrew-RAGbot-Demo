@@ -83,9 +83,11 @@ statistically validated. Full per-question detail:
 Requires: Docker, Python 3.10 (exactly — not 3.11+), ~4GB free RAM headroom.
 
 ```bash
-# 1. Clone both repos as siblings
+# 1. Clone the Demo repo. Its requirements.txt pulls the forked engine directly
+#    from GitHub, pinned to a commit, so this single clone is enough to run it:
 git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot-Demo.git
-git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot.git
+#    (to review or modify the retrieval engine's own code, clone it separately:
+#    git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot.git)
 
 # 2. Elasticsearch
 docker run -d --name es-rag \
@@ -98,7 +100,7 @@ docker run -d --name es-rag \
 cd Webiks-Hebrew-RAGbot-Demo
 py -3.10 -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt   # installs the forked engine in editable mode via `-e ../Webiks-Hebrew-RAGbot`
+pip install -r requirements.txt   # pulls the forked engine straight from GitHub, pinned to a commit
 
 # 4. Model + config
 #    - Download the retrieval model and place it in app/artifacts/
