@@ -202,7 +202,7 @@
   .fusion-list li.hi { background: var(--accent-soft); color: var(--accent-text); font-weight: 700; }
   .arrow { text-align: center; font-size: 22px; color: var(--text-muted); }
 
-  .iter-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .iter-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .iter-card { border-radius: 10px; border: 1px solid var(--border); padding: 16px 18px; background: var(--surface); }
   .iter-card .v { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
   .iter-card.final { border-color: var(--accent); background: var(--accent-soft); }
@@ -349,14 +349,14 @@
           <ul class="fusion-list">
             <li><span class="pos mono">1</span> Page A</li>
             <li><span class="pos mono">2</span> Page B</li>
-            <li class="hi"><span class="pos mono">6</span> Page G (gold)</li>
+            <li class="hi"><span class="pos mono">6</span> <span dir="rtl" lang="he">אלמנה</span> (gold)</li>
           </ul>
         </div>
         <div class="arrow">+</div>
         <div class="fusion-col">
           <h3>BM25 rank</h3>
           <ul class="fusion-list">
-            <li class="hi"><span class="pos mono">1</span> Page G (gold)</li>
+            <li class="hi"><span class="pos mono">1</span> <span dir="rtl" lang="he">אלמנה</span> (gold)</li>
             <li><span class="pos mono">2</span> Page C</li>
             <li><span class="pos mono">3</span> Page A</li>
           </ul>
@@ -365,7 +365,7 @@
         <div class="fusion-col result">
           <h3>Fused rank (weighted 2:1)</h3>
           <ul class="fusion-list">
-            <li class="hi"><span class="pos mono">1</span> Page G (gold)</li>
+            <li class="hi"><span class="pos mono">1</span> <span dir="rtl" lang="he">אלמנה</span> (gold)</li>
             <li><span class="pos mono">2</span> Page A</li>
             <li><span class="pos mono">3</span> Page C</li>
           </ul>
@@ -374,16 +374,12 @@
 
       <div class="iter-strip">
         <div class="iter-card">
-          <div class="v">1 · Diagnose</div>
-          <p>Inspected the baseline's real failures, not a generic checklist. Verified the hypothesis with a standalone BM25 check before writing any code.</p>
-        </div>
-        <div class="iter-card">
-          <div class="v">2 · Build &amp; evaluate</div>
+          <div class="v">1 · Build &amp; evaluate</div>
           <p>Iterated unweighted → weighted RRF after v1 reshuffled good rank-1 answers. Evaluated on 30 held-out questions, never seen in training.</p>
           <div class="weight mono">dense 2 · bm25 1 (final)</div>
         </div>
         <div class="iter-card final">
-          <div class="v">3 · Review &amp; harden</div>
+          <div class="v">2 · Review &amp; harden</div>
           <p>Code review caught a real scoring bug — double-counting in the fusion math. Fixed, unit-tested, and re-evaluated before integration.</p>
         </div>
       </div>

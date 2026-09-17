@@ -1,5 +1,9 @@
 # Submission — Hebrew RAG Retrieval Improvement
 
+**Built:** hybrid BM25 + dense retrieval via weighted Reciprocal Rank Fusion (2:1).
+**Result:** Recall@3 (the production metric) 0.833 → 0.933, with a documented
+rank-1/MRR trade-off — details below.
+
 ## The improvement: Hybrid BM25 + Dense Retrieval
 
 **Before:** `Engine.search_documents()` retrieved purely via cosine similarity against a
@@ -39,21 +43,22 @@ review, in `EVALUATION_METHODOLOGY.md`.
   right page?"
 - **MRR@10** — average of 1/rank of the first hit; distinguishes rank-1 from rank-9,
   which Recall@10 alone can't.
-- **NDCG@k** — included alongside MRR because it discounts lower ranks more gently
-  (log-based vs. linear) — a genuinely different view of rank quality.
+- **NDCG@k** — a softer, log-discounted complement to MRR's hard rank cutoff.
 - **Not included: MAP.** With one relevant document per query, Average Precision equals
   `1/rank` exactly — identical to MRR here, so computing both is pure duplication.
 
-**Eval set — why not just sample the QA CSV.** That file *is* the retrieval model's
-training data (per the task brief). I reconstructed the exact held-out validation split
-the training code (`Webiks-Hebrew-RAGbot-Trainer/utils.py: split_train_eval`) would have
-produced — a 90/10 split on unique questions with a fixed seed (`random_state=42`) — and
-sampled 30 questions from *only* that reconstructed held-out pool. The search index (450
-paragraphs: the 30 questions' 161 real answer-paragraphs + ~289 random unrelated
-distractor paragraphs) ensures genuine wrong answers are retrievable, avoiding an
-earlier ceiling-effect dead end (a distractor-free index scored a meaningless perfect
-1.000 on everything). Full methodology, including both dead ends, in
-`EVALUATION_METHODOLOGY.md`.
+**Eval set — why not just sample the QA CSV:**
+- **No leakage.** That file *is* the retrieval model's training data (per the task
+  brief), so I reconstructed the exact held-out validation split the training code
+  (`Webiks-Hebrew-RAGbot-Trainer/utils.py: split_train_eval`) would have produced — a
+  90/10 split on unique questions with a fixed seed (`random_state=42`) — and sampled 30
+  questions from *only* that reconstructed held-out pool.
+- **Real distractors.** The search index (450 paragraphs: the 30 questions' 161 real
+  answer-paragraphs + ~289 random unrelated distractors) ensures genuine wrong answers
+  are retrievable — avoiding an earlier dead end where a distractor-free index scored a
+  meaningless perfect 1.000 on everything.
+
+Full methodology, including both dead ends, in `EVALUATION_METHODOLOGY.md`.
 
 **Results — Baseline (dense) vs. Improved (hybrid, weighted RRF), n=30 questions:**
 
@@ -72,8 +77,9 @@ Recall@3 — what actually determines whether the LLM sees the right page under
 production settings — improved from 0.833 to 0.933 (3 of 5 previously-missing
 questions now surface correctly). This came with an honest cost: some rank-1 hits
 got nudged lower by the fusion (lowering Recall@1/MRR), and one specific long,
-low-specificity query still regresses out of the top 10 — a known, documented
-limitation of plain-text BM25 without a Hebrew-aware analyzer (noted as future work).
+low-specificity query (the "workers from the territories" query) still regresses out of
+the top 10 — a known, documented limitation of plain-text BM25 without a Hebrew-aware
+analyzer (noted as future work).
 With n=30, each question is worth ~3.3 points, so these deltas are directional, not
 statistically validated. Full per-question detail:
 `EVALUATION_METHODOLOGY.md`, `results/baseline_metrics.json`, `results/improved_metrics.json`.
@@ -84,10 +90,10 @@ Requires: Docker, Python 3.10 (exactly — not 3.11+), ~4GB free RAM headroom.
 
 ```bash
 # 1. Clone the Demo repo. Its requirements.txt pulls the forked engine directly
-#    from GitHub, pinned to a commit, so this single clone is enough to run it:
+#    from GitHub, pinned to a commit, so this single clone is enough to run it
+#    (clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot.git separately
+#    only if you want to review or modify the engine's own code):
 git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot-Demo.git
-#    (to review or modify the retrieval engine's own code, clone it separately:
-#    git clone https://github.com/liorKreimer/Webiks-Hebrew-RAGbot.git)
 
 # 2. Elasticsearch
 docker run -d --name es-rag \
@@ -100,28 +106,34 @@ docker run -d --name es-rag \
 cd Webiks-Hebrew-RAGbot-Demo
 py -3.10 -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt   # pulls the forked engine straight from GitHub, pinned to a commit
+pip install -r requirements.txt   # installs the forked engine automatically
+```
 
-# 4. Model + config
-#    - Download the retrieval model and place it in app/artifacts/
-#      (see the original README for the Google Drive link)
-#    - Create app/.env from app/.env-example; set IS_MOCK_GPT_CLIENT=TRUE (no OpenAI key needed),
-#      RETRIEVAL_MODE=hybrid (or "dense" for the original, unmodified behavior), and
-#      ES_EMBEDDING_INDEX=embedded_index (ships blank in .env-example - blank isn't the same
-#      as unset, and an empty value breaks the index pattern)
-#    - Set PATH_TO_ES_INITIAL_VALUES to a paragraph-corpus JSON to index. For a fast
-#      reproduction of the numbers above, use the committed
-#      downloads/paragraphs_corpus_holdout.json (450 paragraphs) - the full corpus is much
-#      larger and can take hours on a memory-constrained machine (see below)
+**4. Model + config** (manual steps, not shell commands):
+- Download the retrieval model and place it in `app/artifacts/` (see the original
+  README for the Google Drive link).
+- Create `app/.env` from `app/.env-example`; set `IS_MOCK_GPT_CLIENT=TRUE` (no OpenAI
+  key needed) and `RETRIEVAL_MODE=hybrid` (or `dense` for the original, unmodified
+  behavior).
+- Also set `ES_EMBEDDING_INDEX=embedded_index` — it ships blank in `.env-example`, and
+  blank isn't the same as unset; an empty value breaks the index pattern.
+- Set `PATH_TO_ES_INITIAL_VALUES` to a paragraph-corpus JSON to index. For a fast
+  reproduction of the numbers above, use the committed
+  `downloads/paragraphs_corpus_holdout.json` (450 paragraphs) — the full corpus is much
+  larger and can take hours on a memory-constrained machine.
 
+```bash
 # 5. Run (note: cwd must be app/src — see IMPORTANT note below)
 cd app/src
 ../../.venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 5000
+```
 
-# 6. Seed Elasticsearch (one-time, or whenever the corpus changes).
-#    This call is synchronous and blocks until indexing finishes - on the 450-paragraph
-#    holdout corpus above, expect roughly 30-40 minutes on a memory-constrained (~8GB) machine,
-#    not a hang. Don't run this concurrently with anything else memory-heavy.
+**Step 6 blocks until indexing finishes** — on the 450-paragraph holdout corpus above,
+expect roughly 30-40 minutes on a memory-constrained (~8GB) machine, not a hang. Don't
+run it concurrently with anything else memory-heavy.
+
+```bash
+# 6. Seed Elasticsearch (one-time, or whenever the corpus changes)
 curl http://localhost:5000/initialize_elastic_from_json
 
 # 7. Verify
